@@ -61,9 +61,9 @@ spliced expr = do
 outputNode :: String -> Attrs -> [Node] -> TH.ExpQ
 outputNode tag attrs children = do
   childrenStmts <- mapM outputNodeWithBindings children
-  let allChildrenBindings = TH.TupP $ retrieveBindings childrenStmts
+  let allChildrenBindings = return $ TH.TupE $ retrieveBindingVars childrenStmts
       stringAttrs = TH.listE $ List.map toStringAttr attrs
-  returnStmt <- TH.NoBindS <$> [|return allChildrenBindings|]
+  returnStmt <- TH.NoBindS <$> [|return $(allChildrenBindings)|]
   let doExpression = return $ TH.DoE $ childrenStmts ++ [returnStmt]
   [| Dom.elAttr tag (Map.fromList $(stringAttrs)) $ $(doExpression) |]
 
@@ -77,14 +77,14 @@ outputNodeWithBindings n@(Node _ _ _) = do
   varPs <- replicateM (numberOfSplices n) (TH.VarP <$> TH.newName "i")
   TH.BindS <$> pure (TH.TupP varPs) <*> outputWidgetCode n
 
-retrieveBindings :: [TH.Stmt] -> [TH.Pat]
-retrieveBindings = concatMap retrieveFrom
+retrieveBindingVars :: [TH.Stmt] -> [TH.Exp]
+retrieveBindingVars = concatMap retrieveFrom
   where
-    retrieveFrom :: TH.Stmt -> [TH.Pat]
-    retrieveFrom (TH.BindS p _) = fromPat p
+    retrieveFrom :: TH.Stmt -> [TH.Exp]
+    retrieveFrom (TH.BindS p _) = map TH.VarE (fromPat p)
     retrieveFrom _              = []
-    fromPat :: TH.Pat -> [TH.Pat]
-    fromPat vp@(TH.VarP _) = [vp]
+    fromPat :: TH.Pat -> [TH.Name]
+    fromPat (TH.VarP name) = [name]
     fromPat (TH.TupP ps)   = concatMap fromPat ps
     fromPat _              = []
 
