@@ -7,27 +7,20 @@
 module ReflexJsx.Parser
        ( parseJsx
        , Node(..)
-       , Attrs(..)
-       , AttrValue(..)
+       , Attrs
        ) where
 
-import Text.Parsec (runParser, Parsec, try, eof, many, many1, between)
-import Text.Parsec.Char (char, letter, noneOf, string, alphaNum, spaces)
+import Text.Parsec (runParser, Parsec, try, eof, many, many1, manyTill, between)
+import Text.Parsec.Char (char, anyChar, letter, oneOf, noneOf, string, alphaNum, spaces)
 
 import Control.Applicative ((<|>))
 
-
-data AttrValue = TextVal String
-               | ExprVal String
-
-
-data Attrs = SplicedAttrs String
-           | StaticAttrs [(String, AttrValue)]
-
+type Attrs = [(String, String)]
 
 data Node = Node String Attrs [Node]
           | Text String
           | SplicedNode String
+          deriving Show
 
 
 parseJsx :: Monad m => String -> m Node
@@ -51,7 +44,7 @@ jsxElement = do
 jsxSelfClosingElement :: Parsec String u Node
 jsxSelfClosingElement = do
   _ <- char '<'
-  name <- jsxElementName
+  name  <- jsxIdentifier
   attrs <- jsxNodeAttrs
   _ <- string "/>"
   return (Node name attrs [])
@@ -68,77 +61,50 @@ jsxNormalElement = do
 jsxOpeningElement :: Parsec String u (String, Attrs)
 jsxOpeningElement = do
   _ <- char '<'
-  name <- jsxElementName
+  name <- jsxIdentifier
   attrs <- jsxNodeAttrs
   _ <- char '>'
   return (name, attrs)
 
-
 jsxNodeAttrs :: Parsec String u Attrs
-jsxNodeAttrs = do
-  try jsxSplicedAttrMap <|> (StaticAttrs <$> many jsxNodeAttr)
+jsxNodeAttrs = many jsxNodeAttr
 
-
-jsxSplicedAttrMap :: Parsec String u Attrs
-jsxSplicedAttrMap = do
-  name <- between (string "{...") (string "}") $ many (noneOf "}")
-  return $ SplicedAttrs name
-
-
-jsxNodeAttr :: Parsec String u (String, AttrValue)
+jsxNodeAttr :: Parsec String u (String, String)
 jsxNodeAttr = do
   key <- jsxAttributeName
   spaces
   _ <- char '='
   spaces
-  value <- jsxQuotedValue <|> jsxSplicedValue
+  value <- jsxQuotedValue
   spaces
   return (key, value)
 
-
 jsxAttributeName :: Parsec String u String
-jsxAttributeName = do
-  many $ letter <|> char '-'
+jsxAttributeName = many $ letter <|> char '-'
 
-
-jsxQuotedValue :: Parsec String u AttrValue
+jsxQuotedValue :: Parsec String u String
 jsxQuotedValue = do
   contents <- between (char '"') (char '"') $ many (noneOf "\"")
-  return $ TextVal contents
-
-
-jsxSplicedValue :: Parsec String u AttrValue
-jsxSplicedValue = do
-  name <- between (char '{') (char '}') $ many (noneOf "}")
-  return $ ExprVal name
-
+  return contents
 
 jsxClosingElement :: String -> Parsec String u ()
 jsxClosingElement ele = do
   _ <- string "</" *> string ele *> char '>'
   return ()
 
-
 jsxChild :: Parsec String u Node
 jsxChild = do
   try jsxText <|> try jsxSplicedNode <|> try jsxElement
-
 
 jsxText :: Parsec String u Node
 jsxText = do
   contents <- many1 $ noneOf "{<>}"
   return $ Text contents
 
-
 jsxSplicedNode :: Parsec String u Node
 jsxSplicedNode = do
   exprString <- between (char '{') (char '}') $ many (noneOf "}")
   return $ SplicedNode exprString
-
-
-jsxElementName :: Parsec String u String
-jsxElementName = jsxIdentifier
-
 
 jsxIdentifier :: Parsec String u String
 jsxIdentifier = do
