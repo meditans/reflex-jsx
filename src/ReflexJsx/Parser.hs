@@ -10,7 +10,7 @@ module ReflexJsx.Parser
        , Attrs
        ) where
 
-import Text.Parsec (runParser, Parsec, try, eof, many, many1, manyTill, between)
+import Text.Parsec (runParser, Parsec, try, eof, many, many1, manyTill, between, (<?>))
 import Text.Parsec.Char (char, anyChar, letter, oneOf, noneOf, string, alphaNum, spaces)
 
 import Control.Applicative ((<|>))
@@ -38,7 +38,7 @@ parseJsx s =
 
 jsxElement :: Parsec String u Node
 jsxElement = do
-  try jsxSelfClosingElement <|> jsxNormalElement
+  try jsxSelfClosingElement <|> jsxNormalElement <?> "Could not parse element"
 
 
 jsxSelfClosingElement :: Parsec String u Node
@@ -89,12 +89,12 @@ jsxQuotedValue = do
 
 jsxClosingElement :: String -> Parsec String u ()
 jsxClosingElement ele = do
-  _ <- string "</" *> string ele *> char '>'
+  _ <- string "</" *> string ele <* char '>'
   return ()
 
 jsxChild :: Parsec String u Node
 jsxChild = do
-  try jsxText <|> try jsxSplicedNode <|> try jsxElement
+  try jsxText <|> try jsxSplicedNode <|> try jsxElement <?> "Problems in jsxChild"
 
 jsxText :: Parsec String u Node
 jsxText = do
