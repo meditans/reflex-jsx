@@ -70,7 +70,7 @@ outputNode tag attrs children = do
       [| Dom.elAttr tag (Map.fromList $(stringAttrs)) $ $(doExpression) |]
     SplicedAttrs attrExpr -> do
       let Right exp = parseExp attrExpr
-      [| Dom.elAttr tag $(return exp) $ $(doExpression) |]
+      [| Dom.elDynAttr tag $(return exp) $ $(doExpression) |]
 
 outputNodeWithBindings :: Node -> TH.StmtQ
 outputNodeWithBindings t@(Text _) =
