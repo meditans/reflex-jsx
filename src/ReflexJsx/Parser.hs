@@ -7,15 +7,17 @@
 module ReflexJsx.Parser
        ( parseJsx
        , Node(..)
-       , Attrs
+       , Attrs(..)
        ) where
 
-import Text.Parsec (runParser, Parsec, try, eof, many, many1, manyTill, between, (<?>))
-import Text.Parsec.Char (char, anyChar, letter, oneOf, noneOf, string, alphaNum, spaces)
+import Text.Parsec (runParser, Parsec, try, eof, many, many1, between, (<?>))
+import Text.Parsec.Char (char, letter, noneOf, string, alphaNum, spaces)
 
 import Control.Applicative ((<|>))
 
-type Attrs = [(String, String)]
+data Attrs = SplicedAttrs String
+           | StaticAttrs [(String, String)]
+           deriving Show
 
 data Node = Node String Attrs [Node]
           | Text String
@@ -67,7 +69,13 @@ jsxOpeningElement = do
   return (name, attrs)
 
 jsxNodeAttrs :: Parsec String u Attrs
-jsxNodeAttrs = many jsxNodeAttr
+jsxNodeAttrs = do
+  try jsxSplicedAttrMap <|> (StaticAttrs <$> many jsxNodeAttr)
+
+jsxSplicedAttrMap :: Parsec String u Attrs
+jsxSplicedAttrMap = do
+  name <- between (string "{...") (string "}") $ many (noneOf "}")
+  return $ SplicedAttrs name
 
 jsxNodeAttr :: Parsec String u (String, String)
 jsxNodeAttr = do
@@ -111,3 +119,8 @@ jsxIdentifier = do
   name <- many1 alphaNum
   spaces
   return name
+
+
+-- o = "<body><div class=\"row\"><div class=\"col-lg-6 col-md-8 col-sm-8 col-xs-12\"><div class=\"input-group\"><div class=\"input-group-addon\"><span>Add another user</span></div><input class=\"form-control\" type=\"text\"/><div class=\"input-group-btn\"><button class=\"btn btn-default\" type=\"button\">Add </button></div></div></div></div><span class=\"help-block\">That doesn't look like a valid user. Does the user exist?</span></body>"
+
+-- a = "<div class=\"row\">\n <div class=\"col-lg-6 col-md-8 col-sm-8 col-xs-12\">\n</div></div>"

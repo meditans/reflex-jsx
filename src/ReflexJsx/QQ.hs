@@ -62,10 +62,15 @@ outputNode :: String -> Attrs -> [Node] -> TH.ExpQ
 outputNode tag attrs children = do
   childrenStmts <- mapM outputNodeWithBindings children
   let allChildrenBindings = return $ TH.TupE $ retrieveBindingVars childrenStmts
-      stringAttrs = TH.listE $ List.map toStringAttr attrs
   returnStmt <- TH.NoBindS <$> [|return $(allChildrenBindings)|]
   let doExpression = return $ TH.DoE $ childrenStmts ++ [returnStmt]
-  [| Dom.elAttr tag (Map.fromList $(stringAttrs)) $ $(doExpression) |]
+  case attrs of
+    StaticAttrs staticAttrs -> do
+      let stringAttrs = TH.listE $ List.map toStringAttr staticAttrs
+      [| Dom.elAttr tag (Map.fromList $(stringAttrs)) $ $(doExpression) |]
+    SplicedAttrs attrExpr -> do
+      let Right exp = parseExp attrExpr
+      [| Dom.elAttr tag $(return exp) $ $(doExpression) |]
 
 outputNodeWithBindings :: Node -> TH.StmtQ
 outputNodeWithBindings t@(Text _) =
